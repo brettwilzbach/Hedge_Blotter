@@ -1,0 +1,2 @@
+trade_date,trade_id,book,strategy,side,notional_mm,expiry,index1,cond1,strike1,index2,cond2,strike2,logic,cost_bp,cost_usd
+2025-09-24,EX-DD-001,Hedge,Cross-Asset Digitals,Long,10,2025-12-19,SPX Index,<=,6000,CLA Comdty,>=,70,AND,4.5,450000

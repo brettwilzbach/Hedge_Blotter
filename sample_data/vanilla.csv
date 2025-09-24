@@ -1,0 +1,2 @@
+trade_date,trade_id,book,strategy,side,index,bbg_ticker,notional_mm_or_contracts,expiry,payoff_type,strike,cost_bp_or_pt,cost_usd
+2025-09-24,EX-SPY-001,Hedge,Index Options,Long,SPY US Equity,SPY US Equity,500,2025-10-17,Put,600,,

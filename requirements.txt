@@ -1,0 +1,15 @@
+# Core web framework
+streamlit
+
+# Data processing
+pandas
+numpy
+
+# File handling
+openpyxl
+
+# Visualization
+altair
+
+# Bloomberg API (requires special installation - see BLOOMBERG_API_SETUP.md)
+# blpapi
