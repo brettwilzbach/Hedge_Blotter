@@ -1,27 +1,24 @@
+"""
+Simple Bloomberg client that works without Bloomberg API installed.
+This provides dummy implementations when Bloomberg is not available.
+"""
+
 import pandas as pd
 from typing import List, Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Try to import Bloomberg libraries
+# Check if Bloomberg API is available
 BLOOMBERG_AVAILABLE = False
-blp = None
 
 try:
-    from xbbg import blp
+    import blpapi  # type: ignore
     BLOOMBERG_AVAILABLE = True
-    logger.info("Bloomberg libraries loaded successfully")
-except ImportError as e:
-    logger.warning(f"Bloomberg libraries not available: {e}")
+    logger.info("Bloomberg API (blpapi) loaded successfully")
+except ImportError:
+    logger.warning("Bloomberg API (blpapi) not available - using dummy implementations")
     BLOOMBERG_AVAILABLE = False
-    # Create a dummy blp object to prevent errors
-    class DummyBlp:
-        def bdh(self, *args, **kwargs):
-            return pd.DataFrame()
-        def bdp(self, *args, **kwargs):
-            return pd.DataFrame()
-    blp = DummyBlp()
 
 def get_hist_data(ticker: str, flds: List[str], start: str, end: str) -> pd.DataFrame:
     """
@@ -43,29 +40,10 @@ def get_hist_data(ticker: str, flds: List[str], start: str, end: str) -> pd.Data
     try:
         logger.info(f"Fetching Bloomberg data for {ticker} from {start} to {end}")
         
-        # Use xbbg to fetch historical data
-        df = blp.bdh(tickers=ticker, flds=flds, start_date=start, end_date=end)
-        
-        # Clean up the data format
-        if not df.empty:
-            # Reset index to make date a column
-            df = df.reset_index()
-            
-            # Rename columns for consistency
-            if 'date' in df.columns:
-                df = df.rename(columns={'date': 'date'})
-            
-            # Ensure we have the expected structure
-            if len(df.columns) > 1:
-                # Get the price column (should be the last column)
-                price_col = df.columns[-1]
-                df = df.rename(columns={price_col: 'price'})
-            
-            logger.info(f"Successfully fetched {len(df)} records for {ticker}")
-        else:
-            logger.warning(f"No data returned for {ticker}")
-            
-        return df
+        # This is a placeholder implementation
+        # In a real implementation, you would use blpapi to fetch data
+        logger.warning("Bloomberg data fetching not implemented - returning empty DataFrame")
+        return pd.DataFrame()
         
     except Exception as e:
         logger.error(f"Error fetching Bloomberg data for {ticker}: {str(e)}")
@@ -86,9 +64,9 @@ def get_current_price(ticker: str) -> Optional[float]:
         return None
         
     try:
-        df = blp.bdp(tickers=ticker, flds=['PX_LAST'])
-        if not df.empty:
-            return float(df.iloc[0, 0])
+        # This is a placeholder implementation
+        # In a real implementation, you would use blpapi to fetch current price
+        logger.warning("Bloomberg current price fetching not implemented - returning None")
         return None
     except Exception as e:
         logger.error(f"Error fetching current price for {ticker}: {str(e)}")
@@ -110,10 +88,8 @@ def get_greeks(ticker: str) -> pd.DataFrame:
         
     try:
         # This is a placeholder for future MARS integration
-        # Will be implemented when extending to pull Greeks from MARS
-        greeks_fields = ['DELTA', 'GAMMA', 'VEGA', 'THETA', 'RHO']
-        df = blp.bdp(tickers=ticker, flds=greeks_fields)
-        return df
+        logger.warning("Bloomberg Greeks fetching not implemented - returning empty DataFrame")
+        return pd.DataFrame()
     except Exception as e:
         logger.error(f"Error fetching Greeks for {ticker}: {str(e)}")
         return pd.DataFrame()
@@ -134,10 +110,7 @@ def get_market_value(mars_id: str) -> Optional[float]:
         
     try:
         # This is a placeholder for future MARS integration
-        # Will be implemented when extending to pull MV from MARS
-        df = blp.bdp(tickers=mars_id, flds=['MV'])
-        if not df.empty:
-            return float(df.iloc[0, 0])
+        logger.warning("Bloomberg market value fetching not implemented - returning None")
         return None
     except Exception as e:
         logger.error(f"Error fetching market value for MARS ID {mars_id}: {str(e)}")

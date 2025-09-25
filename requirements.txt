@@ -11,6 +11,7 @@ openpyxl
 # Visualization
 altair
 
-# Bloomberg API (requires special installation - see BLOOMBERG_API_SETUP.md)
-blpapi
-xbbg
+# Bloomberg API (optional - requires special installation - see BLOOMBERG_API_SETUP.md)
+# Uncomment the following lines if you have Bloomberg Terminal and want to use Bloomberg features:
+# blpapi
+# xbbg
