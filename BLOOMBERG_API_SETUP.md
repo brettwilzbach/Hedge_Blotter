@@ -21,7 +21,19 @@ The Bloomberg API (`blpapi`) requires special installation steps as it's not ava
 2. Follow the installation wizard
 3. Note the installation directory (typically `C:\bloomberg\API\v3\`)
 
-### 3. Set Environment Variables
+### 3. Test Installation
+After installation, test if the Bloomberg API works by running the test script:
+
+```bash
+python test_bloomberg.py
+```
+
+This will:
+- Test if `blpapi` can be imported
+- Test session creation with Bloomberg Terminal
+- Test fetching actual SPY price data
+
+### 4. Set Environment Variables
 Add the following environment variables to your system:
 
 **Windows:**
@@ -36,20 +48,44 @@ export BLPAPI_ROOT=/path/to/bloomberg/api/v3
 export PATH=$PATH:$BLPAPI_ROOT/bin
 ```
 
-### 4. Install Python Package
+### 5. Install Python Package
 Install the `blpapi` Python package from Bloomberg's private repository:
 
 ```bash
 python -m pip install --index-url=https://bcms.bloomberg.com/pip/simple blpapi
 ```
 
-### 5. Verify Installation
+### 6. Verify Installation
 Test the installation by running:
 
 ```python
 import blpapi
 print("Bloomberg API successfully installed!")
 ```
+
+### 7. Run Test Script
+Test the complete setup by running the test script:
+
+```bash
+python test_bloomberg.py
+```
+
+This will:
+- Test if `blpapi` can be imported
+- Test session creation with Bloomberg Terminal
+- Test fetching actual SPY price data
+
+### 8. Test in Streamlit App
+Once the API is working, you can test it in the Streamlit app:
+
+```bash
+streamlit run app.py
+```
+
+In the app:
+1. Look for the "🔍 Bloomberg API Test" section at the top
+2. Click "Test Bloomberg Connection"
+3. The app will test the connection and show SPY price data if successful
 
 ## Troubleshooting
 

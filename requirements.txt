@@ -12,4 +12,5 @@ openpyxl
 altair
 
 # Bloomberg API (requires special installation - see BLOOMBERG_API_SETUP.md)
-# blpapi
+blpapi
+xbbg

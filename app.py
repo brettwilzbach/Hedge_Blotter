@@ -13,6 +13,9 @@ import pandas as pd
 import streamlit as st
 import altair as alt
 
+# Import Bloomberg client
+from utils.bloomberg_client import get_hist_data, get_current_price
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -413,10 +416,156 @@ def perform_recon(mars_df: pd.DataFrame, exotics_df: pd.DataFrame) -> Dict[str, 
 # Main Application
 # ------------------------------
 
+def test_bloomberg_connection():
+    """Test Bloomberg API connection with SPY data."""
+    st.header("🔍 Bloomberg API Test")
+
+    if st.button("Test Bloomberg Connection", type="primary"):
+        with st.spinner("Testing Bloomberg connection..."):
+            try:
+                # Test basic import
+                import blpapi
+                st.success("✅ blpapi module imported successfully")
+
+                # Test session creation
+                session = get_bloomberg_session()
+                if session:
+                    st.success("✅ Bloomberg session created successfully")
+
+                    # Test with SPY data
+                    spy_data = get_bloomberg_history(['SPY US Equity'])
+
+                    if not spy_data.empty:
+                        st.success(f"✅ Successfully fetched SPY data: {len(spy_data)} records")
+
+                        # Show sample data
+                        st.subheader("SPY Price Data Sample:")
+                        st.dataframe(spy_data.head(10))
+
+                        # Show latest price
+                        latest_price = spy_data.iloc[-1]
+                        st.metric("Latest SPY Price", f"${latest_price['price']:.2f}", delta=None)
+
+                        # Create a simple chart
+                        chart = create_price_chart(spy_data, 'SPY US Equity', title="SPY US Equity - Test Chart")
+                        st.altair_chart(chart, use_container_width=True)
+
+                    else:
+                        st.warning("⚠️ No data returned from Bloomberg API")
+                        st.info("This could mean: Bloomberg Terminal not running, API not properly configured, or no permissions for SPY data")
+
+                else:
+                    st.error("❌ Failed to create Bloomberg session")
+                    st.info("Make sure: Bloomberg Terminal is running, API is properly installed and configured")
+
+            except ImportError:
+                st.error("❌ blpapi module not found")
+                st.error("Please install Bloomberg API following the setup guide:")
+                st.code("pip install --index-url=https://bcms.bloomberg.com/pip/simple blpapi", language="bash")
+            except Exception as e:
+                st.error(f"❌ Bloomberg test failed: {str(e)}")
+
+def bloomberg_charting_page():
+    """Dedicated page for Bloomberg charting functionality."""
+    st.title("📈 Bloomberg Charting")
+    st.caption("Live Bloomberg charts for any ticker")
+    
+    # Ticker input
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        ticker = st.text_input("Enter Bloomberg Ticker", "SPY US Equity", 
+                              help="Examples: SPY US Equity, CDX HY CDSI S44 5Y PRC Corp, SPX Index")
+    
+    with col2:
+        if st.button("Get Chart", type="primary"):
+            st.rerun()
+    
+    # Date range selection
+    col3, col4 = st.columns(2)
+    with col3:
+        start_date = st.date_input("Start Date", value=datetime.now().date() - timedelta(days=365))
+    with col4:
+        end_date = st.date_input("End Date", value=datetime.now().date())
+    
+    # Fetch and display data
+    if ticker:
+        with st.spinner(f"Fetching data for {ticker}..."):
+            try:
+                # Convert dates to string format
+                start_str = start_date.strftime("%Y-%m-%d")
+                end_str = end_date.strftime("%Y-%m-%d")
+                
+                # Get historical data using our Bloomberg client
+                df = get_hist_data(ticker, ["PX_LAST"], start_str, end_str)
+                
+                if not df.empty:
+                    st.success(f"✅ Successfully fetched {len(df)} records for {ticker}")
+                    
+                    # Display current price
+                    current_price = get_current_price(ticker)
+                    if current_price:
+                        st.metric("Current Price", f"${current_price:.2f}")
+                    
+                    # Create and display chart
+                    if 'date' in df.columns and 'price' in df.columns:
+                        # Create Altair chart
+                        chart = alt.Chart(df).mark_line(
+                            color=PRIMARY_COLOR, 
+                            strokeWidth=2
+                        ).encode(
+                            x=alt.X('date:T', title='Date'),
+                            y=alt.Y('price:Q', title='Price'),
+                            tooltip=['date:T', 'price:Q']
+                        ).properties(
+                            width=800,
+                            height=400,
+                            title=f"{ticker} - Price History"
+                        )
+                        
+                        st.altair_chart(chart, use_container_width=True)
+                        
+                        # Show data table
+                        with st.expander("View Raw Data"):
+                            st.dataframe(df)
+                    else:
+                        st.error("Unexpected data format from Bloomberg API")
+                        st.write("Data columns:", list(df.columns))
+                        st.dataframe(df)
+                        
+                else:
+                    st.warning(f"No data returned for {ticker}")
+                    st.info("This could mean:")
+                    st.write("- Bloomberg Terminal is not running")
+                    st.write("- Invalid ticker format")
+                    st.write("- No permissions for this ticker")
+                    st.write("- Network connectivity issues")
+                    
+            except Exception as e:
+                st.error(f"Error fetching data: {str(e)}")
+                st.info("Make sure Bloomberg Terminal is running and the ticker format is correct")
+
 def main():
     st.title("Cannae Hedge Blotter MVP")
     st.caption("Manual entry for all trades - vanilla options and exotic dual digitals with Bloomberg integration")
+
+    # Page selection
+    page = st.sidebar.selectbox(
+        "Select Page",
+        ["Main Blotter", "Bloomberg Charts", "Bloomberg Test"]
+    )
     
+    if page == "Bloomberg Charts":
+        bloomberg_charting_page()
+        return
+    elif page == "Bloomberg Test":
+        test_bloomberg_connection()
+        return
+    
+    # Main blotter page continues here...
+    # Test Bloomberg connection first
+    test_bloomberg_connection()
+
     # Removed file uploads - everything is manual entry now
     
     # Bloomberg connection settings
@@ -772,10 +921,33 @@ def main():
                         if pd.notna(ticker):
                             tickers_needed.add(ticker)
                 
-                # Fetch Bloomberg data
+                # Fetch Bloomberg data using new client
                 if tickers_needed:
                     with st.spinner("Fetching Bloomberg data..."):
-                        price_data = get_bloomberg_history(list(tickers_needed), bbg_host, bbg_port)
+                        # Use our new Bloomberg client for each ticker
+                        all_price_data = []
+                        for ticker in tickers_needed:
+                            try:
+                                # Get 1 year of data
+                                end_date = datetime.now().date()
+                                start_date = end_date - timedelta(days=365)
+                                
+                                df = get_hist_data(ticker, ["PX_LAST"], 
+                                                  start_date.strftime("%Y-%m-%d"), 
+                                                  end_date.strftime("%Y-%m-%d"))
+                                
+                                if not df.empty and 'date' in df.columns and 'price' in df.columns:
+                                    df['ticker'] = ticker
+                                    all_price_data.append(df)
+                                    
+                            except Exception as e:
+                                st.warning(f"Could not fetch data for {ticker}: {str(e)}")
+                        
+                        # Combine all data
+                        if all_price_data:
+                            price_data = pd.concat(all_price_data, ignore_index=True)
+                        else:
+                            price_data = pd.DataFrame()
                     
                     if not price_data.empty:
                         # Create charts for selected trades
@@ -834,5 +1006,64 @@ def main():
             st.write("**3. MARS ID:** Optional field for Bloomberg integration and reconciliation")
             st.write("**4. Charts:** Select trades from the dropdown to view Bloomberg price charts")
 
+def test_bloomberg_standalone():
+    """Standalone test function for Bloomberg API."""
+    try:
+        import blpapi
+        print("✅ blpapi imported successfully")
+
+        # Test session
+        session = get_bloomberg_session()
+        if session:
+            print("✅ Bloomberg session created")
+
+            # Test SPY data
+            spy_data = get_bloomberg_history(['SPY US Equity'])
+            if not spy_data.empty:
+                print(f"✅ Successfully fetched {len(spy_data)} SPY records")
+                print("Latest SPY price:", spy_data.iloc[-1]['price'])
+                return True
+            else:
+                print("⚠️ No SPY data returned")
+                return False
+        else:
+            print("❌ Failed to create session")
+            return False
+    except ImportError:
+        print("❌ blpapi not installed")
+        print("Install with: pip install --index-url=https://bcms.bloomberg.com/pip/simple blpapi")
+        return False
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return False
+
+# Create standalone test script
+BLOOMBERG_TEST_SCRIPT = '''
+import sys
+sys.path.append(".")
+
+# Import the functions from app.py
+from app import test_bloomberg_standalone
+
 if __name__ == "__main__":
-    main()
+    print("🔍 Bloomberg API Test")
+    print("=" * 50)
+    success = test_bloomberg_standalone()
+    print("=" * 50)
+    if success:
+        print("✅ Bloomberg API test PASSED!")
+        sys.exit(0)
+    else:
+        print("❌ Bloomberg API test FAILED!")
+        sys.exit(1)
+'''
+
+if __name__ == "__main__":
+    # Run standalone test if called directly
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        print("Running Bloomberg API test...")
+        success = test_bloomberg_standalone()
+        sys.exit(0 if success else 1)
+    else:
+        main()
