@@ -9,6 +9,7 @@ BLOOMBERG_AVAILABLE = False
 blp = None
 
 try:
+    import xbbg
     from xbbg import blp
     BLOOMBERG_AVAILABLE = True
     logger.info("Bloomberg libraries loaded successfully")

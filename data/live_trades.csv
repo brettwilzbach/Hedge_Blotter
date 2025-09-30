@@ -1,0 +1,2 @@
+trade_date,trade_id,book,strategy,side,index,bbg_ticker,notional_mm,contracts,expiry,payoff_type,strike,cost_bp,cost_usd,mars_id,notes,source,trade_type
+2025-10-17,SPDR S&P 500 ETF TRUST P @ 600 OCT 25,Hedge,Listed Options,Long,SPY,SPY US Equity,0.0,500,2025-10-17,Put,600.0,6.9,450000.0,ES12445095 Equity,Added in two different pieces,Manual,Vanilla

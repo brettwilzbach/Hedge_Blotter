@@ -723,11 +723,21 @@ def main():
             with vanilla_col3:
                 vanilla_expiry = st.date_input("Expiry*", value=datetime.now().date() + timedelta(days=30), key="vanilla_expiry")
             with vanilla_col4:
-                vanilla_payoff_type = st.selectbox("Payoff Type", ["Call", "Put", "Vanilla"], key="vanilla_payoff_type")
+                vanilla_payoff_type = st.selectbox("Payoff Type", ["Call", "Put", "Call Spread", "Put Spread", "Vanilla"], key="vanilla_payoff_type")
             
             vanilla_index = st.text_input("Index/Ticker*", placeholder="SPY US Equity", key="vanilla_index")
             vanilla_bbg_ticker = st.text_input("Bloomberg Ticker*", placeholder="SPY US Equity", key="vanilla_bbg_ticker")
-            vanilla_strike = st.number_input("Strike*", step=0.01, format="%.2f", key="vanilla_strike")
+            
+            # Strike fields - show second strike for spreads
+            if vanilla_payoff_type in ["Call Spread", "Put Spread"]:
+                vanilla_col_strike1, vanilla_col_strike2 = st.columns(2)
+                with vanilla_col_strike1:
+                    vanilla_strike = st.number_input("Long Strike*", step=0.01, format="%.2f", key="vanilla_strike", help="Strike price for the long leg")
+                with vanilla_col_strike2:
+                    vanilla_strike2 = st.number_input("Short Strike*", step=0.01, format="%.2f", key="vanilla_strike2", help="Strike price for the short leg")
+            else:
+                vanilla_strike = st.number_input("Strike*", step=0.01, format="%.2f", key="vanilla_strike")
+                vanilla_strike2 = None
             
             vanilla_col5, vanilla_col6 = st.columns(2)
             with vanilla_col5:
@@ -739,29 +749,30 @@ def main():
             vanilla_notes = st.text_area("Notes", placeholder="Optional notes about this trade", key="vanilla_notes", height=60)
             
             # Radio button for submission instead of auto-submit on enter
-            vanilla_submit_option = st.radio(
-                "Ready to submit?",
-                ["No, keep editing", "Yes, add this trade"],
-                key="vanilla_submit_radio"
-            )
-            
-            # Check if form is valid
-            is_valid = (vanilla_trade_id and vanilla_trade_date and vanilla_index and vanilla_bbg_ticker and vanilla_strike and 
-                       (vanilla_notional > 0 or vanilla_contracts > 0))
-            
-            # Debug info (remove this later)
-            if st.checkbox("Show debug info", key="debug_vanilla"):
-                st.write(f"Trade ID: {vanilla_trade_id}")
-                st.write(f"Notional: {vanilla_notional}")
-                st.write(f"Contracts: {vanilla_contracts}")
-                st.write(f"Is valid: {is_valid}")
-                st.write(f"Submit option: {vanilla_submit_option}")
-            
-            vanilla_submitted = st.form_submit_button("Add Vanilla Trade", type="primary", disabled=(vanilla_submit_option != "Yes, add this trade" or not is_valid))
+            vanilla_submitted = st.form_submit_button("Add Vanilla Trade", type="primary")
             
             if vanilla_submitted:
-                if is_valid:
-                    new_vanilla_trade = {
+                # Show warnings for missing required fields but don't block submission
+                warnings = []
+                if not vanilla_trade_id:
+                    warnings.append("Trade ID is recommended")
+                if not vanilla_index:
+                    warnings.append("Index/Ticker is recommended")
+                if not vanilla_bbg_ticker:
+                    warnings.append("Bloomberg Ticker is recommended")
+                if vanilla_strike == 0:
+                    warnings.append("Strike should be non-zero")
+                if vanilla_payoff_type in ["Call Spread", "Put Spread"] and vanilla_strike2 == 0:
+                    warnings.append("Short Strike should be non-zero for spreads")
+                if vanilla_notional <= 0 and vanilla_contracts <= 0:
+                    warnings.append("Either Notional or Contracts should be > 0")
+                
+                if warnings:
+                    for warning in warnings:
+                        st.warning(warning)
+                
+                # Always allow submission - user can fix later if needed
+                new_vanilla_trade = {
                         'trade_date': vanilla_trade_date,
                         'trade_id': vanilla_trade_id,
                         'book': vanilla_book,
@@ -774,6 +785,7 @@ def main():
                         'expiry': vanilla_expiry,
                         'payoff_type': vanilla_payoff_type,
                         'strike': vanilla_strike,
+                        'strike2': vanilla_strike2 if vanilla_strike2 else None,
                         'cost_bp': vanilla_cost_bp if vanilla_cost_bp > 0 else None,
                         'cost_usd': vanilla_cost_usd if vanilla_cost_usd > 0 else None,
                         'mars_id': vanilla_mars_id if vanilla_mars_id else None,
@@ -782,17 +794,15 @@ def main():
                         'trade_type': 'Vanilla'
                     }
                     
-                    if 'manual_vanilla_trades' not in st.session_state:
-                        st.session_state.manual_vanilla_trades = []
-                    st.session_state.manual_vanilla_trades.append(new_vanilla_trade)
-                    
-                    # Auto-save data
-                    auto_save_data()
-                    
-                    st.success(f"Added vanilla trade {vanilla_trade_id}")
-                    st.rerun()
-                else:
-                    st.error("Please fill in all required fields and either Notional (mm) or Contracts")
+                if 'manual_vanilla_trades' not in st.session_state:
+                    st.session_state.manual_vanilla_trades = []
+                st.session_state.manual_vanilla_trades.append(new_vanilla_trade)
+                
+                # Auto-save data
+                auto_save_data()
+                
+                st.success(f"Added vanilla trade {vanilla_trade_id}")
+                st.rerun()
     
     # Exotics Entry Form
     with st.sidebar.expander("Add Exotic Trade", expanded=True):
@@ -831,51 +841,64 @@ def main():
             notes = st.text_area("Notes", placeholder="Optional notes about this trade", height=60)
 
             # Radio button for submission instead of auto-submit on enter
-            submit_option = st.radio(
-                "Ready to submit?",
-                ["No, keep editing", "Yes, add this trade"],
-                key="exotic_submit_radio"
-            )
-
-            submitted = st.form_submit_button("Add Trade", type="primary", disabled=(submit_option != "Yes, add this trade"))
+            submitted = st.form_submit_button("Add Trade", type="primary")
 
             if submitted:
-                if trade_id and trade_date and notional_mm and index1 and strike1 and index2 and strike2:
-                    new_trade = {
-                        'trade_date': trade_date,
-                        'trade_id': trade_id,
-                        'book': book,
-                        'strategy': strategy,
-                        'side': side,
-                        'notional_mm': notional_mm,
-                        'expiry': expiry,
-                        'index1': index1,
-                        'cond1': cond1,
-                        'strike1': strike1,
-                        'index2': index2,
-                        'cond2': cond2,
-                        'strike2': strike2,
-                        'logic': logic,
-                        'cost_bp': cost_bp if cost_bp > 0 else None,
-                        'cost_usd': cost_usd if cost_usd > 0 else None,
-                        'mars_id': mars_id if mars_id else None,
-                        'notes': notes if notes else None,
-                        'source': 'Manual',
-                        'payoff_type': 'Dual Digital',
-                        'trade_type': 'Exotic'
-                    }
+                # Show warnings for missing required fields but don't block submission
+                warnings = []
+                if not trade_id:
+                    warnings.append("Trade ID is recommended")
+                if not trade_date:
+                    warnings.append("Trade Date is recommended")
+                if not notional_mm:
+                    warnings.append("Notional (mm) is recommended")
+                if not index1:
+                    warnings.append("Index 1 is recommended")
+                if not strike1:
+                    warnings.append("Strike 1 is recommended")
+                if not index2:
+                    warnings.append("Index 2 is recommended")
+                if not strike2:
+                    warnings.append("Strike 2 is recommended")
+                
+                if warnings:
+                    for warning in warnings:
+                        st.warning(warning)
+                
+                # Always allow submission - user can fix later if needed
+                new_trade = {
+                    'trade_date': trade_date,
+                    'trade_id': trade_id,
+                    'book': book,
+                    'strategy': strategy,
+                    'side': side,
+                    'notional_mm': notional_mm,
+                    'expiry': expiry,
+                    'index1': index1,
+                    'cond1': cond1,
+                    'strike1': strike1,
+                    'index2': index2,
+                    'cond2': cond2,
+                    'strike2': strike2,
+                    'logic': logic,
+                    'cost_bp': cost_bp if cost_bp > 0 else None,
+                    'cost_usd': cost_usd if cost_usd > 0 else None,
+                    'mars_id': mars_id if mars_id else None,
+                    'notes': notes if notes else None,
+                    'source': 'Manual',
+                    'payoff_type': 'Dual Digital',
+                    'trade_type': 'Exotic'
+                }
 
-                    if 'manual_trades' not in st.session_state:
-                        st.session_state.manual_trades = []
-                    st.session_state.manual_trades.append(new_trade)
-                    
-                    # Auto-save data
-                    auto_save_data()
-                    
-                    st.success(f"Added trade {trade_id}")
-                    st.rerun()
-                else:
-                    st.error("Please fill in all required fields (marked with *)")
+                if 'manual_trades' not in st.session_state:
+                    st.session_state.manual_trades = []
+                st.session_state.manual_trades.append(new_trade)
+                
+                # Auto-save data
+                auto_save_data()
+                
+                st.success(f"Added trade {trade_id}")
+                st.rerun()
     
     # Initialize manual trades stores and load existing data
     if 'manual_trades' not in st.session_state:
@@ -1040,14 +1063,26 @@ def main():
                                     with edit_vanilla_col3:
                                         edit_vanilla_expiry = st.date_input("Expiry*", value=trade['expiry'], key=f"edit_vanilla_expiry_{i}")
                                     with edit_vanilla_col4:
-                                        edit_vanilla_payoff_type = st.selectbox("Payoff Type", ["Call", "Put", "Vanilla"], 
-                                                                              index=["Call", "Put", "Vanilla"].index(trade['payoff_type']), 
+                                        edit_vanilla_payoff_type = st.selectbox("Payoff Type", ["Call", "Put", "Call Spread", "Put Spread", "Vanilla"], 
+                                                                              index=["Call", "Put", "Call Spread", "Put Spread", "Vanilla"].index(trade.get('payoff_type', 'Call')), 
                                                                               key=f"edit_vanilla_payoff_type_{i}")
                                     
                                     edit_vanilla_index = st.text_input("Index/Ticker*", value=trade['index'], key=f"edit_vanilla_index_{i}")
                                     edit_vanilla_bbg_ticker = st.text_input("Bloomberg Ticker*", value=trade['bbg_ticker'], key=f"edit_vanilla_bbg_ticker_{i}")
-                                    edit_vanilla_strike = st.number_input("Strike*", value=float(trade['strike']), 
-                                                                         step=0.01, format="%.2f", key=f"edit_vanilla_strike_{i}")
+                                    
+                                    # Strike fields - show second strike for spreads
+                                    if edit_vanilla_payoff_type in ["Call Spread", "Put Spread"]:
+                                        edit_vanilla_col_strike1, edit_vanilla_col_strike2 = st.columns(2)
+                                        with edit_vanilla_col_strike1:
+                                            edit_vanilla_strike = st.number_input("Long Strike*", value=float(trade['strike']), 
+                                                                                 step=0.01, format="%.2f", key=f"edit_vanilla_strike_{i}", help="Strike price for the long leg")
+                                        with edit_vanilla_col_strike2:
+                                            edit_vanilla_strike2 = st.number_input("Short Strike*", value=float(trade.get('strike2', 0)), 
+                                                                                  step=0.01, format="%.2f", key=f"edit_vanilla_strike2_{i}", help="Strike price for the short leg")
+                                    else:
+                                        edit_vanilla_strike = st.number_input("Strike*", value=float(trade['strike']), 
+                                                                             step=0.01, format="%.2f", key=f"edit_vanilla_strike_{i}")
+                                        edit_vanilla_strike2 = None
                                     
                                     edit_vanilla_col5, edit_vanilla_col6 = st.columns(2)
                                     with edit_vanilla_col5:
@@ -1068,8 +1103,10 @@ def main():
                                     )
                                     
                                     # Check if edit form is valid
-                                    edit_is_valid = (edit_vanilla_trade_id and edit_vanilla_trade_date and edit_vanilla_index and edit_vanilla_bbg_ticker and edit_vanilla_strike and 
+                                    edit_is_valid = (edit_vanilla_trade_id and edit_vanilla_trade_date and edit_vanilla_index and edit_vanilla_bbg_ticker and edit_vanilla_strike != 0 and 
                                                    (edit_vanilla_notional > 0 or edit_vanilla_contracts > 0))
+                                    if edit_vanilla_payoff_type in ["Call Spread", "Put Spread"] and edit_vanilla_strike2 == 0:
+                                        edit_is_valid = False
                                     
                                     edit_vanilla_col_save, edit_vanilla_col_cancel = st.columns(2)
                                     with edit_vanilla_col_save:
@@ -1088,6 +1125,7 @@ def main():
                                                 'expiry': edit_vanilla_expiry,
                                                 'payoff_type': edit_vanilla_payoff_type,
                                                 'strike': edit_vanilla_strike,
+                                                'strike2': edit_vanilla_strike2 if edit_vanilla_strike2 else None,
                                                 'cost_bp': edit_vanilla_cost_bp if edit_vanilla_cost_bp > 0 else None,
                                                 'cost_usd': edit_vanilla_cost_usd if edit_vanilla_cost_usd > 0 else None,
                                                 'mars_id': edit_vanilla_mars_id if edit_vanilla_mars_id else None,
