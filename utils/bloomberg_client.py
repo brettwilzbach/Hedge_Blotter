@@ -1,28 +1,39 @@
 import pandas as pd
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 import logging
 
 logger = logging.getLogger(__name__)
 
 # Try to import Bloomberg libraries
 BLOOMBERG_AVAILABLE = False
-blp = None
+blp: Any = None
 
-try:
-    import xbbg
-    from xbbg import blp
-    BLOOMBERG_AVAILABLE = True
-    logger.info("Bloomberg libraries loaded successfully")
-except ImportError as e:
-    logger.warning(f"Bloomberg libraries not available: {e}")
-    BLOOMBERG_AVAILABLE = False
-    # Create a dummy blp object to prevent errors
-    class DummyBlp:
-        def bdh(self, *args, **kwargs):
-            return pd.DataFrame()
-        def bdp(self, *args, **kwargs):
-            return pd.DataFrame()
-    blp = DummyBlp()
+def _try_import_bloomberg():
+    """Try to import Bloomberg libraries safely."""
+    global BLOOMBERG_AVAILABLE, blp
+    try:
+        # Check if blpapi is available first
+        import blpapi  # type: ignore
+        # If blpapi is available, try to import xbbg
+        import xbbg  # type: ignore
+        from xbbg import blp  # type: ignore
+        BLOOMBERG_AVAILABLE = True
+        logger.info("Bloomberg libraries loaded successfully")
+        return True
+    except (ImportError, Exception) as e:
+        logger.warning(f"Bloomberg libraries not available: {e}")
+        BLOOMBERG_AVAILABLE = False
+        # Create a dummy blp object to prevent errors
+        class DummyBlp:
+            def bdh(self, *args, **kwargs):
+                return pd.DataFrame()
+            def bdp(self, *args, **kwargs):
+                return pd.DataFrame()
+        blp = DummyBlp()
+        return False
+
+# Try to import Bloomberg libraries
+_try_import_bloomberg()
 
 def get_hist_data(ticker: str, flds: List[str], start: str, end: str) -> pd.DataFrame:
     """
@@ -45,7 +56,10 @@ def get_hist_data(ticker: str, flds: List[str], start: str, end: str) -> pd.Data
         logger.info(f"Fetching Bloomberg data for {ticker} from {start} to {end}")
         
         # Use xbbg to fetch historical data
-        df = blp.bdh(tickers=ticker, flds=flds, start_date=start, end_date=end)
+        if blp is not None:
+            df = blp.bdh(tickers=ticker, flds=flds, start_date=start, end_date=end)
+        else:
+            df = pd.DataFrame()
         
         # Clean up the data format
         if not df.empty:
@@ -59,7 +73,7 @@ def get_hist_data(ticker: str, flds: List[str], start: str, end: str) -> pd.Data
             # Ensure we have the expected structure
             if len(df.columns) > 1:
                 # Get the price column (should be the last column)
-                price_col = df.columns[-1]
+                price_col = str(df.columns[-1])
                 df = df.rename(columns={price_col: 'price'})
             
             logger.info(f"Successfully fetched {len(df)} records for {ticker}")
@@ -87,9 +101,10 @@ def get_current_price(ticker: str) -> Optional[float]:
         return None
         
     try:
-        df = blp.bdp(tickers=ticker, flds=['PX_LAST'])
-        if not df.empty:
-            return float(df.iloc[0, 0])
+        if blp is not None:
+            df = blp.bdp(tickers=ticker, flds=['PX_LAST'])
+            if not df.empty:
+                return float(df.iloc[0, 0])
         return None
     except Exception as e:
         logger.error(f"Error fetching current price for {ticker}: {str(e)}")
@@ -113,8 +128,10 @@ def get_greeks(ticker: str) -> pd.DataFrame:
         # This is a placeholder for future MARS integration
         # Will be implemented when extending to pull Greeks from MARS
         greeks_fields = ['DELTA', 'GAMMA', 'VEGA', 'THETA', 'RHO']
-        df = blp.bdp(tickers=ticker, flds=greeks_fields)
-        return df
+        if blp is not None:
+            df = blp.bdp(tickers=ticker, flds=greeks_fields)
+            return df
+        return pd.DataFrame()
     except Exception as e:
         logger.error(f"Error fetching Greeks for {ticker}: {str(e)}")
         return pd.DataFrame()
@@ -136,9 +153,10 @@ def get_market_value(mars_id: str) -> Optional[float]:
     try:
         # This is a placeholder for future MARS integration
         # Will be implemented when extending to pull MV from MARS
-        df = blp.bdp(tickers=mars_id, flds=['MV'])
-        if not df.empty:
-            return float(df.iloc[0, 0])
+        if blp is not None:
+            df = blp.bdp(tickers=mars_id, flds=['MV'])
+            if not df.empty:
+                return float(df.iloc[0, 0])
         return None
     except Exception as e:
         logger.error(f"Error fetching market value for MARS ID {mars_id}: {str(e)}")

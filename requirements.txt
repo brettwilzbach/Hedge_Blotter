@@ -15,4 +15,4 @@ altair
 # Uncomment the following lines if you have Bloomberg Terminal and want to use Bloomberg features:
 # Note: These packages require Bloomberg Terminal to be installed and running
 # blpapi
-# xbbg
+xbbg

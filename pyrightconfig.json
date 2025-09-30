@@ -1,0 +1,18 @@
+{
+  "include": [
+    "."
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.git"
+  ],
+  "ignore": [
+    "**/node_modules"
+  ],
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": "none",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+  "stubPath": "./stubs"
+}

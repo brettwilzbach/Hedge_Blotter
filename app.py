@@ -697,8 +697,8 @@ def main():
         bbg_host = st.text_input("Host (optional)", value="")
         bbg_port = st.number_input("Port", value=8194, step=1)
     
-    # Manual Entry Forms
-    st.sidebar.header("Manual Entry")
+    # Trade Entry Forms
+    st.sidebar.header("Trade Entry")
     
     # Vanilla Options Entry Form
     with st.sidebar.expander("Add Vanilla Option", expanded=True):
@@ -804,44 +804,88 @@ def main():
                 st.success(f"Added vanilla trade {vanilla_trade_id}")
                 st.rerun()
     
-    # Exotics Entry Form
-    with st.sidebar.expander("Add Exotic Trade", expanded=True):
-        with st.form("manual_entry_form"):
-            trade_id = st.text_input("Trade ID*", placeholder="EX-DD-001")
-            trade_date = st.date_input("Trade Date*", value=datetime.now().date())
-            book = st.selectbox("Book", ["Hedge", "Trading", "Prop"])
-            strategy = st.text_input("Strategy", placeholder="Cross-Asset Digitals")
-            side = st.selectbox("Side", ["Long", "Short"])
-
-            col1, col2 = st.columns(2)
+    # Exotics Entry Form - moved to main area for more horizontal space
+    st.sidebar.markdown("---")
+    st.sidebar.caption("Exotic trades form moved to main area below for better layout")
+    
+    # Initialize manual trades stores and load existing data
+    if 'manual_trades' not in st.session_state:
+        st.session_state.manual_trades = []
+    if 'manual_vanilla_trades' not in st.session_state:
+        st.session_state.manual_vanilla_trades = []
+    if 'trade_history' not in st.session_state:
+        st.session_state.trade_history = []
+    
+    # Load existing data on first run
+    if 'data_loaded' not in st.session_state:
+        try:
+            vanilla_trades, exotic_trades = load_live_trades()
+            trade_history = load_trade_history()
+            
+            st.session_state.manual_vanilla_trades = vanilla_trades
+            st.session_state.manual_trades = exotic_trades
+            st.session_state.trade_history = trade_history
+            st.session_state.data_loaded = True
+            
+            if vanilla_trades or exotic_trades or trade_history:
+                st.success(f"📁 Loaded existing data: {len(vanilla_trades)} vanilla, {len(exotic_trades)} exotic, {len(trade_history)} history")
+        except Exception as e:
+            st.warning(f"Could not load existing data: {str(e)}")
+            st.session_state.data_loaded = True
+    
+    # Convert manual vanilla trades to DataFrame
+    vanilla_data = pd.DataFrame()
+    if st.session_state.manual_vanilla_trades:
+        vanilla_data = pd.DataFrame(st.session_state.manual_vanilla_trades)
+        st.sidebar.success(f"{len(st.session_state.manual_vanilla_trades)} vanilla trades entered")
+    
+    # Convert manual exotic trades to DataFrame
+    exotics_data = pd.DataFrame()
+    if st.session_state.manual_trades:
+        exotics_data = pd.DataFrame(st.session_state.manual_trades)
+        st.sidebar.success(f"{len(st.session_state.manual_trades)} exotic trades entered")
+    
+    
+    # Exotic Trades Entry Form - moved below vanilla for better layout
+    with st.sidebar.expander("Add Exotic Trade", expanded=False):
+        with st.form("exotic_entry_form"):
+            col1, col2, col3 = st.columns(3)
+            
             with col1:
-                notional_mm = st.number_input("Notional (mm)*", min_value=0.0, step=0.1, format="%.1f")
+                st.subheader("Basic Info")
+                trade_id = st.text_input("Trade ID*", placeholder="EX-DD-001", key="exotic_trade_id")
+                trade_date = st.date_input("Trade Date*", value=datetime.now().date(), key="exotic_trade_date")
+                book = st.selectbox("Book", ["Hedge", "Trading", "Prop"], key="exotic_book")
+                strategy = st.text_input("Strategy", placeholder="Cross-Asset Digitals", key="exotic_strategy")
+                side = st.selectbox("Side", ["Long", "Short"], key="exotic_side")
+                
+                notional_mm = st.number_input("Notional (mm)*", min_value=0.0, step=0.1, format="%.1f", key="exotic_notional")
+                expiry = st.date_input("Expiry*", value=datetime.now().date() + timedelta(days=90), key="exotic_expiry")
+            
             with col2:
-                expiry = st.date_input("Expiry*", value=datetime.now().date() + timedelta(days=90))
-
-            st.subheader("Index 1")
-            index1 = st.text_input("Index 1*", placeholder="SPX Index")
-            cond1 = st.selectbox("Condition 1", ["<=", ">=", "<", ">", "=="])
-            strike1 = st.number_input("Strike 1*", step=0.01, format="%.2f")
-
-            st.subheader("Index 2")
-            index2 = st.text_input("Index 2*", placeholder="CLA Comdty")
-            cond2 = st.selectbox("Condition 2", ["<=", ">=", "<", ">", "=="])
-            strike2 = st.number_input("Strike 2*", step=0.01, format="%.2f")
-
-            logic = st.selectbox("Logic", ["AND", "OR"])
-
-            col3, col4 = st.columns(2)
+                st.subheader("Index 1")
+                index1 = st.text_input("Index 1*", placeholder="SPX Index", key="exotic_index1")
+                cond1 = st.selectbox("Condition 1", ["<=", ">=", "<", ">", "=="], key="exotic_cond1")
+                strike1 = st.number_input("Strike 1*", step=0.01, format="%.2f", key="exotic_strike1")
+                
+                st.subheader("Index 2")
+                index2 = st.text_input("Index 2*", placeholder="CLA Comdty", key="exotic_index2")
+                cond2 = st.selectbox("Condition 2", ["<=", ">=", "<", ">", "=="], key="exotic_cond2")
+                strike2 = st.number_input("Strike 2*", step=0.01, format="%.2f", key="exotic_strike2")
+                
+                logic = st.selectbox("Logic", ["AND", "OR"], key="exotic_logic")
+            
             with col3:
-                cost_bp = st.number_input("Cost (bp)", min_value=0.0, step=0.1, format="%.1f")
-            with col4:
-                cost_usd = st.number_input("Cost ($)", min_value=0.0, step=1000.0, format="%.0f")
+                st.subheader("Pricing")
+                cost_bp = st.number_input("Cost (bp)", min_value=0.0, step=0.1, format="%.1f", key="exotic_cost_bp")
+                cost_usd = st.number_input("Cost ($)", min_value=0.0, step=1000.0, format="%.0f", key="exotic_cost_usd")
+            
+            # Full width fields
+            mars_id = st.text_input("MARS ID (for Bloomberg integration)", placeholder="Optional MARS reference", key="exotic_mars_id")
+            notes = st.text_area("Notes", placeholder="Optional notes about this trade", height=60, key="exotic_notes")
 
-            mars_id = st.text_input("MARS ID (for Bloomberg integration)", placeholder="Optional MARS reference")
-            notes = st.text_area("Notes", placeholder="Optional notes about this trade", height=60)
-
-            # Radio button for submission instead of auto-submit on enter
-            submitted = st.form_submit_button("Add Trade", type="primary")
+            # Submit button
+            submitted = st.form_submit_button("Add Exotic Trade", type="primary")
 
             if submitted:
                 # Show warnings for missing required fields but don't block submission
@@ -897,61 +941,158 @@ def main():
                 # Auto-save data
                 auto_save_data()
                 
-                st.success(f"Added trade {trade_id}")
+                st.success(f"Added exotic trade {trade_id}")
                 st.rerun()
     
-    # Initialize manual trades stores and load existing data
-    if 'manual_trades' not in st.session_state:
-        st.session_state.manual_trades = []
-    if 'manual_vanilla_trades' not in st.session_state:
-        st.session_state.manual_vanilla_trades = []
-    if 'trade_history' not in st.session_state:
-        st.session_state.trade_history = []
+    # Master Portfolio Spreadsheet View
+    st.subheader("📊 Live Trades - Portfolio View")
     
-    # Load existing data on first run
-    if 'data_loaded' not in st.session_state:
-        try:
-            vanilla_trades, exotic_trades = load_live_trades()
-            trade_history = load_trade_history()
-            
-            st.session_state.manual_vanilla_trades = vanilla_trades
-            st.session_state.manual_trades = exotic_trades
-            st.session_state.trade_history = trade_history
-            st.session_state.data_loaded = True
-            
-            if vanilla_trades or exotic_trades or trade_history:
-                st.success(f"📁 Loaded existing data: {len(vanilla_trades)} vanilla, {len(exotic_trades)} exotic, {len(trade_history)} history")
-        except Exception as e:
-            st.warning(f"Could not load existing data: {str(e)}")
-            st.session_state.data_loaded = True
+    # Get all live trades from session state
+    all_live_trades = []
+    if hasattr(st.session_state, 'manual_vanilla_trades') and st.session_state.manual_vanilla_trades:
+        all_live_trades.extend(st.session_state.manual_vanilla_trades)
+    if hasattr(st.session_state, 'manual_exotic_trades') and st.session_state.manual_exotic_trades:
+        all_live_trades.extend(st.session_state.manual_exotic_trades)
     
-    # Convert manual vanilla trades to DataFrame
-    vanilla_data = pd.DataFrame()
-    if st.session_state.manual_vanilla_trades:
-        vanilla_data = pd.DataFrame(st.session_state.manual_vanilla_trades)
-        st.sidebar.success(f"{len(st.session_state.manual_vanilla_trades)} vanilla trades entered")
-    
-    # Convert manual exotic trades to DataFrame
-    exotics_data = pd.DataFrame()
-    if st.session_state.manual_trades:
-        exotics_data = pd.DataFrame(st.session_state.manual_trades)
-        st.sidebar.success(f"{len(st.session_state.manual_trades)} exotic trades entered")
-    
-    # Show data overview
-    if not vanilla_data.empty or not exotics_data.empty:
-        st.subheader("📈 Live Trades")
-        col1, col2 = st.columns(2)
+    if all_live_trades:
+        # Create master spreadsheet with all trades
+        portfolio_data = []
         
-        with col1:
-            st.subheader("Manual Vanilla Trades")
-            if not vanilla_data.empty:
-                st.dataframe(vanilla_data, height=300)
+        for i, trade in enumerate(all_live_trades):
+            if trade.get('trade_type') == 'Vanilla' or trade.get('payoff_type') in ['Call', 'Put', 'Straddle', 'Strangle']:
+                portfolio_data.append({
+                    'Trade ID': trade.get('trade_id', f'V{i+1}'),
+                    'Type': 'Vanilla',
+                    'Side': trade.get('side', 'N/A'),
+                    'Underlying': trade.get('bbg_ticker', trade.get('index1', 'N/A')),
+                    'Strike': trade.get('strike', trade.get('strike1', 'N/A')),
+                    'Expiry': trade.get('expiry', 'N/A'),
+                    'Notional (mm)': trade.get('notional_mm', 0),
+                    'Contracts': trade.get('contracts', 0),
+                    'Cost ($)': trade.get('cost_usd', 0),
+                    'Delta': trade.get('delta', 0) or 0,
+                    'Gamma': trade.get('gamma', 0) or 0,
+                    'Theta': trade.get('theta', 0) or 0,
+                    'Vega': trade.get('vega', 0) or 0,
+                    'Market Value ($)': trade.get('market_value', 0) or 0,
+                    'Mark ($)': trade.get('mark', 0) or 0,
+                    'MTD P&L ($)': trade.get('mtd_pnl', 0) or 0,
+                    'Inception P&L ($)': trade.get('inception_pnl', 0) or 0,
+                    'Book': trade.get('book', 'N/A')
+                })
+            elif trade.get('trade_type') == 'Exotic' or trade.get('payoff_type') == 'Dual Digital':
+                portfolio_data.append({
+                    'Trade ID': trade.get('trade_id', f'E{i+1}'),
+                    'Type': 'Exotic',
+                    'Side': trade.get('side', 'N/A'),
+                    'Underlying': f"{trade.get('index1', 'N/A')} vs {trade.get('index2', 'N/A')}",
+                    'Strike': f"{trade.get('strike1', 'N/A')} / {trade.get('strike2', 'N/A')}",
+                    'Expiry': trade.get('expiry', 'N/A'),
+                    'Notional (mm)': trade.get('notional_mm', 0),
+                    'Contracts': 'N/A',
+                    'Cost ($)': trade.get('cost_usd', 0),
+                    'Delta': trade.get('delta', 0) or 0,
+                    'Gamma': trade.get('gamma', 0) or 0,
+                    'Theta': trade.get('theta', 0) or 0,
+                    'Vega': trade.get('vega', 0) or 0,
+                    'Market Value ($)': trade.get('market_value', 0) or 0,
+                    'Mark ($)': trade.get('mark', 0) or 0,
+                    'MTD P&L ($)': trade.get('mtd_pnl', 0) or 0,
+                    'Inception P&L ($)': trade.get('inception_pnl', 0) or 0,
+                    'Book': trade.get('book', 'N/A')
+                })
+        
+        if portfolio_data:
+            # Create DataFrame
+            df = pd.DataFrame(portfolio_data)
+            
+            # Add totals row
+            totals_row = {
+                'Trade ID': 'TOTAL',
+                'Type': '',
+                'Side': '',
+                'Underlying': '',
+                'Strike': '',
+                'Expiry': '',
+                'Notional (mm)': df['Notional (mm)'].sum(),
+                'Contracts': df['Contracts'].sum() if df['Contracts'].dtype != 'object' else 'N/A',
+                'Cost ($)': df['Cost ($)'].sum(),
+                'Delta': df['Delta'].sum(),
+                'Gamma': df['Gamma'].sum(),
+                'Theta': df['Theta'].sum(),
+                'Vega': df['Vega'].sum(),
+                'Market Value ($)': df['Market Value ($)'].sum(),
+                'Mark ($)': df['Mark ($)'].sum(),
+                'MTD P&L ($)': df['MTD P&L ($)'].sum(),
+                'Inception P&L ($)': df['Inception P&L ($)'].sum(),
+                'Book': ''
+            }
+            
+            # Add totals row to DataFrame
+            df_with_totals = pd.concat([df, pd.DataFrame([totals_row])], ignore_index=True)
+            
+            # Display the master spreadsheet
+            st.dataframe(
+                df_with_totals,
+                use_container_width=True,
+                hide_index=True,
+                height=400
+            )
+            
+            # Refresh button
+            col_refresh, col_spacer = st.columns([1, 4])
+            with col_refresh:
+                if st.button("🔄 Refresh All Market Data", type="secondary"):
+                    st.info("Market data refresh would be implemented here with Bloomberg API")
+    else:
+        st.info("No live trades found. Add some trades using the forms above.")
+    
+    # Legacy data display (if any)
+    if not vanilla_data.empty or not exotics_data.empty:
+        st.subheader("📈 Legacy Data")
+        
+        # Vanilla Trades - Full Width for better visibility
+        if not vanilla_data.empty:
+            st.subheader("Vanilla Trades")
+            st.dataframe(vanilla_data, use_container_width=True, height=400)
+        
+        # Exotic Trades - Below vanilla
+        if not exotics_data.empty:
+            st.subheader("Exotic Trades")
+            st.dataframe(exotics_data, use_container_width=True, height=300)
                 
-                # Add edit/delete functionality for vanilla trades
-                if st.session_state.manual_vanilla_trades:
-                    st.subheader("Manage Vanilla Trades")
-                    for i, trade in enumerate(st.session_state.manual_vanilla_trades):
-                        with st.expander(f"Trade {trade['trade_id']} - {trade['bbg_ticker']} {trade['payoff_type']}"):
+        # Note: Individual trade management is now handled in the master spreadsheet above
+                            
+                            with col_market:
+                                # Get market data values
+                                delta_val = trade.get('delta', 0) or 0
+                                gamma_val = trade.get('gamma', 0) or 0
+                                theta_val = trade.get('theta', 0) or 0
+                                vega_val = trade.get('vega', 0) or 0
+                                market_value_val = trade.get('market_value', 0) or 0
+                                mark_val = trade.get('mark', 0) or 0
+                                mtd_pnl_val = trade.get('mtd_pnl', 0) or 0
+                                inception_pnl_val = trade.get('inception_pnl', 0) or 0
+                                
+                                # Create spreadsheet-style table
+                                market_data = {
+                                    'Greeks': ['Delta', 'Gamma', 'Theta', 'Vega'],
+                                    'Values': [f"{delta_val:.2f}", f"{gamma_val:.2f}", f"{theta_val:.2f}", f"{vega_val:.2f}"],
+                                    'P&L': ['Mkt Val', 'Mark', 'MTD', 'Total'],
+                                    'P&L Values': [f"${market_value_val:,.0f}", f"${mark_val:,.0f}", f"${mtd_pnl_val:,.0f}", f"${inception_pnl_val:,.0f}"]
+                                }
+                                
+                                # Display as a simple table
+                                st.dataframe(
+                                    pd.DataFrame(market_data),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                    height=100
+                                )
+                            
+                            st.divider()
+                            
+                            # Management buttons
                             col_edit, col_unwind, col_expire, col_delete = st.columns(4)
                             
                             with col_edit:
@@ -976,10 +1117,7 @@ def main():
                                     st.session_state.trade_history.append(trade_copy)
                                     
                                     del st.session_state.manual_vanilla_trades[i]
-                                    
-                                    # Auto-save data
                                     auto_save_data()
-                                    
                                     st.success(f"Marked trade {trade['trade_id']} as expired worthless")
                                     st.rerun()
                             
@@ -1037,202 +1175,6 @@ def main():
                             if st.session_state.get(f"edit_vanilla_trade_{i}", False):
                                 st.write("**Edit Vanilla Trade**")
                                 with st.form(f"edit_vanilla_form_{i}"):
-                                    edit_vanilla_trade_id = st.text_input("Trade ID*", value=trade['trade_id'], key=f"edit_vanilla_id_{i}")
-                                    edit_vanilla_trade_date = st.date_input("Trade Date*", value=trade['trade_date'], key=f"edit_vanilla_trade_date_{i}")
-                                    edit_vanilla_book = st.selectbox("Book", ["Hedge", "Trading", "Prop"], 
-                                                                   index=["Hedge", "Trading", "Prop"].index(trade['book']), 
-                                                                   key=f"edit_vanilla_book_{i}")
-                                    edit_vanilla_strategy = st.text_input("Strategy", value=trade['strategy'], key=f"edit_vanilla_strategy_{i}")
-                                    edit_vanilla_side = st.selectbox("Side", ["Long", "Short"], 
-                                                                   index=["Long", "Short"].index(trade['side']), 
-                                                                   key=f"edit_vanilla_side_{i}")
-                                    
-                                    edit_vanilla_col1, edit_vanilla_col2 = st.columns(2)
-                                    with edit_vanilla_col1:
-                                        edit_vanilla_notional = st.number_input("Notional (mm)", value=float(trade.get('notional_mm', trade.get('notional_mm_or_contracts', 0))), 
-                                                                              min_value=0.0, step=0.1, format="%.1f", key=f"edit_vanilla_notional_{i}")
-                                    with edit_vanilla_col2:
-                                        edit_vanilla_contracts = st.number_input("Contracts", value=int(trade.get('contracts', 0)), 
-                                                                               min_value=0, step=1, format="%d", key=f"edit_vanilla_contracts_{i}")
-                                    
-                                    # Either/or validation message
-                                    if edit_vanilla_notional == 0 and edit_vanilla_contracts == 0:
-                                        st.warning("Please enter either Notional (mm) or Contracts")
-                                    
-                                    edit_vanilla_col3, edit_vanilla_col4 = st.columns(2)
-                                    with edit_vanilla_col3:
-                                        edit_vanilla_expiry = st.date_input("Expiry*", value=trade['expiry'], key=f"edit_vanilla_expiry_{i}")
-                                    with edit_vanilla_col4:
-                                        edit_vanilla_payoff_type = st.selectbox("Payoff Type", ["Call", "Put", "Call Spread", "Put Spread", "Vanilla"], 
-                                                                              index=["Call", "Put", "Call Spread", "Put Spread", "Vanilla"].index(trade.get('payoff_type', 'Call')), 
-                                                                              key=f"edit_vanilla_payoff_type_{i}")
-                                    
-                                    edit_vanilla_index = st.text_input("Index/Ticker*", value=trade['index'], key=f"edit_vanilla_index_{i}")
-                                    edit_vanilla_bbg_ticker = st.text_input("Bloomberg Ticker*", value=trade['bbg_ticker'], key=f"edit_vanilla_bbg_ticker_{i}")
-                                    
-                                    # Strike fields - show second strike for spreads
-                                    if edit_vanilla_payoff_type in ["Call Spread", "Put Spread"]:
-                                        edit_vanilla_col_strike1, edit_vanilla_col_strike2 = st.columns(2)
-                                        with edit_vanilla_col_strike1:
-                                            edit_vanilla_strike = st.number_input("Long Strike*", value=float(trade['strike']), 
-                                                                                 step=0.01, format="%.2f", key=f"edit_vanilla_strike_{i}", help="Strike price for the long leg")
-                                        with edit_vanilla_col_strike2:
-                                            edit_vanilla_strike2 = st.number_input("Short Strike*", value=float(trade.get('strike2', 0)), 
-                                                                                  step=0.01, format="%.2f", key=f"edit_vanilla_strike2_{i}", help="Strike price for the short leg")
-                                    else:
-                                        edit_vanilla_strike = st.number_input("Strike*", value=float(trade['strike']), 
-                                                                             step=0.01, format="%.2f", key=f"edit_vanilla_strike_{i}")
-                                        edit_vanilla_strike2 = None
-                                    
-                                    edit_vanilla_col5, edit_vanilla_col6 = st.columns(2)
-                                    with edit_vanilla_col5:
-                                        edit_vanilla_cost_bp = st.number_input("Cost (bp/pt)", value=float(trade.get('cost_bp', trade.get('cost_bp_or_pt', 0))) if trade.get('cost_bp', trade.get('cost_bp_or_pt')) else 0.0, 
-                                                                             min_value=0.0, step=0.1, format="%.1f", key=f"edit_vanilla_cost_bp_{i}")
-                                    with edit_vanilla_col6:
-                                        edit_vanilla_cost_usd = st.number_input("Cost ($)", value=float(trade['cost_usd']) if trade['cost_usd'] else 0.0, 
-                                                                              min_value=0.0, step=1000.0, format="%.0f", key=f"edit_vanilla_cost_usd_{i}")
-                                    
-                                    edit_vanilla_mars_id = st.text_input("MARS ID", value=trade.get('mars_id', ''), key=f"edit_vanilla_mars_id_{i}")
-                                    edit_vanilla_notes = st.text_area("Notes", value=trade.get('notes', ''), key=f"edit_vanilla_notes_{i}", height=60)
-                                    
-                                    # Radio button for submission
-                                    edit_vanilla_submit_option = st.radio(
-                                        "Ready to save changes?",
-                                        ["No, keep editing", "Yes, save changes"],
-                                        key=f"edit_vanilla_submit_radio_{i}"
-                                    )
-                                    
-                                    # Check if edit form is valid
-                                    edit_is_valid = (edit_vanilla_trade_id and edit_vanilla_trade_date and edit_vanilla_index and edit_vanilla_bbg_ticker and edit_vanilla_strike != 0 and 
-                                                   (edit_vanilla_notional > 0 or edit_vanilla_contracts > 0))
-                                    if edit_vanilla_payoff_type in ["Call Spread", "Put Spread"] and edit_vanilla_strike2 == 0:
-                                        edit_is_valid = False
-                                    
-                                    edit_vanilla_col_save, edit_vanilla_col_cancel = st.columns(2)
-                                    with edit_vanilla_col_save:
-                                        if st.form_submit_button("Save Changes", disabled=(edit_vanilla_submit_option != "Yes, save changes" or not edit_is_valid)):
-                                            # Update the vanilla trade
-                                            st.session_state.manual_vanilla_trades[i] = {
-                                                'trade_date': edit_vanilla_trade_date,
-                                                'trade_id': edit_vanilla_trade_id,
-                                                'book': edit_vanilla_book,
-                                                'strategy': edit_vanilla_strategy,
-                                                'side': edit_vanilla_side,
-                                                'index': edit_vanilla_index,
-                                                'bbg_ticker': edit_vanilla_bbg_ticker,
-                                                'notional_mm': edit_vanilla_notional,
-                                                'contracts': edit_vanilla_contracts if edit_vanilla_contracts > 0 else None,
-                                                'expiry': edit_vanilla_expiry,
-                                                'payoff_type': edit_vanilla_payoff_type,
-                                                'strike': edit_vanilla_strike,
-                                                'strike2': edit_vanilla_strike2 if edit_vanilla_strike2 else None,
-                                                'cost_bp': edit_vanilla_cost_bp if edit_vanilla_cost_bp > 0 else None,
-                                                'cost_usd': edit_vanilla_cost_usd if edit_vanilla_cost_usd > 0 else None,
-                                                'mars_id': edit_vanilla_mars_id if edit_vanilla_mars_id else None,
-                                                'notes': edit_vanilla_notes if edit_vanilla_notes else None,
-                                                'source': 'Manual',
-                                                'trade_type': 'Vanilla'
-                                            }
-                                            st.session_state[f"edit_vanilla_trade_{i}"] = False
-                                            auto_save_data()
-                                            st.success(f"Updated vanilla trade {edit_vanilla_trade_id}")
-                                            st.rerun()
-                                    
-                                    with edit_vanilla_col_cancel:
-                                        if st.form_submit_button("Cancel"):
-                                            st.session_state[f"edit_vanilla_trade_{i}"] = False
-                                            st.rerun()
-            else:
-                st.info("No vanilla trades entered")
-        
-        with col2:
-            st.subheader("Manual Exotics Trades")
-            if not exotics_data.empty:
-                st.dataframe(exotics_data, height=300)
-                
-                # Add edit/delete functionality for manual trades
-                if st.session_state.manual_trades:
-                    st.subheader("Manage Manual Trades")
-                    for i, trade in enumerate(st.session_state.manual_trades):
-                        with st.expander(f"Trade {trade['trade_id']} - {trade['index1']} / {trade['index2']}"):
-                            col_edit, col_unwind, col_expire, col_delete = st.columns(4)
-                            
-                            with col_edit:
-                                if st.button(f"Edit", key=f"edit_{i}"):
-                                    st.session_state[f"edit_trade_{i}"] = True
-                            
-                            with col_unwind:
-                                if st.button(f"Unwind", key=f"unwind_{i}"):
-                                    st.session_state[f"unwind_trade_{i}"] = True
-                            
-                            with col_expire:
-                                if st.button(f"Expire", key=f"expire_{i}"):
-                                    # Move to trade history as expired worthless
-                                    trade_copy = trade.copy()
-                                    trade_copy['status'] = 'Expired Worthless'
-                                    trade_copy['unwind_date'] = datetime.now().date()
-                                    trade_copy['unwind_price'] = 0.0
-                                    trade_copy['pnl_usd'] = -float(trade.get('cost_usd', 0)) if trade.get('cost_usd') else 0
-                                    
-                                    if 'trade_history' not in st.session_state:
-                                        st.session_state.trade_history = []
-                                    st.session_state.trade_history.append(trade_copy)
-                                    
-                                    del st.session_state.manual_trades[i]
-                                    auto_save_data()
-                                    st.success(f"Marked trade {trade['trade_id']} as expired worthless")
-                                    st.rerun()
-                            
-                            with col_delete:
-                                if st.button(f"Delete", key=f"delete_{i}"):
-                                    del st.session_state.manual_trades[i]
-                                    auto_save_data()
-                                    st.success(f"Deleted trade {trade['trade_id']}")
-                                    st.rerun()
-                            
-                            # Unwind form
-                            if st.session_state.get(f"unwind_trade_{i}", False):
-                                st.write("**Unwind Exotic Trade**")
-                                with st.form(f"unwind_form_{i}"):
-                                    unwind_date = st.date_input("Unwind Date*", value=datetime.now().date(), key=f"unwind_date_{i}")
-                                    unwind_price = st.number_input("Unwind Price*", step=0.01, format="%.2f", key=f"unwind_price_{i}")
-                                    unwind_notes = st.text_area("Notes", placeholder="Optional notes about the unwind", key=f"unwind_notes_{i}")
-                                    
-                                    unwind_col_save, unwind_col_cancel = st.columns(2)
-                                    with unwind_col_save:
-                                        if st.form_submit_button("Unwind Trade"):
-                                            # Calculate PnL
-                                            original_cost = float(trade.get('cost_usd', 0)) if trade.get('cost_usd') else 0
-                                            unwind_value = unwind_price * float(trade.get('notional_mm', 0))
-                                            pnl = unwind_value - original_cost
-                                            
-                                            # Move to trade history
-                                            trade_copy = trade.copy()
-                                            trade_copy['status'] = 'Unwound'
-                                            trade_copy['unwind_date'] = unwind_date
-                                            trade_copy['unwind_price'] = unwind_price
-                                            trade_copy['unwind_value'] = unwind_value
-                                            trade_copy['pnl_usd'] = pnl
-                                            trade_copy['unwind_notes'] = unwind_notes
-                                            
-                                            if 'trade_history' not in st.session_state:
-                                                st.session_state.trade_history = []
-                                            st.session_state.trade_history.append(trade_copy)
-                                            
-                                            del st.session_state.manual_trades[i]
-                                            auto_save_data()
-                                            st.success(f"Unwound trade {trade['trade_id']} - PnL: ${pnl:,.2f}")
-                                            st.rerun()
-                                    
-                                    with unwind_col_cancel:
-                                        if st.form_submit_button("Cancel"):
-                                            st.session_state[f"unwind_trade_{i}"] = False
-                                            st.rerun()
-                            
-                            # Edit form
-                            if st.session_state.get(f"edit_trade_{i}", False):
-                                st.write("**Edit Trade**")
-                                with st.form(f"edit_form_{i}"):
                                     edit_trade_id = st.text_input("Trade ID*", value=trade['trade_id'], key=f"edit_id_{i}")
                                     edit_trade_date = st.date_input("Trade Date*", value=trade['trade_date'], key=f"edit_trade_date_{i}")
                                     edit_book = st.selectbox("Book", ["Hedge", "Trading", "Prop"], 
@@ -1321,6 +1263,97 @@ def main():
                                         if st.form_submit_button("Cancel"):
                                             st.session_state[f"edit_trade_{i}"] = False
                                             st.rerun()
+        
+        with col2:
+            st.subheader("Manual Exotics Trades")
+            if not exotics_data.empty:
+                st.dataframe(exotics_data, height=300)
+                
+                # Add edit/delete functionality for exotic trades
+                if st.session_state.manual_trades:
+                    st.subheader("Manage Exotic Trades")
+                    for i, trade in enumerate(st.session_state.manual_trades):
+                        with st.expander(f"Trade {trade['trade_id']} - {trade['index1']} / {trade['index2']}"):
+                            # Display basic trade info
+                            col_info1, col_info2 = st.columns(2)
+                            with col_info1:
+                                st.write(f"**Side:** {trade['side']} | **Book:** {trade['book']}")
+                                st.write(f"**Index1:** {trade['index1']} {trade['cond1']} {trade['strike1']}")
+                            with col_info2:
+                                st.write(f"**Index2:** {trade['index2']} {trade['cond2']} {trade['strike2']}")
+                                st.write(f"**Logic:** {trade['logic']} | **Notional:** {trade['notional_mm']}mm")
+                            
+                            # Market Data Section (Spreadsheet Style)
+                            col_refresh, col_market = st.columns([1, 4])
+                            
+                            with col_refresh:
+                                if st.button("🔄", key=f"refresh_exotic_{i}", type="secondary", help="Refresh Market Data"):
+                                    st.info("Market data refresh would be implemented here with Bloomberg API")
+                            
+                            with col_market:
+                                # Get market data values
+                                delta_val = trade.get('delta', 0) or 0
+                                gamma_val = trade.get('gamma', 0) or 0
+                                theta_val = trade.get('theta', 0) or 0
+                                vega_val = trade.get('vega', 0) or 0
+                                market_value_val = trade.get('market_value', 0) or 0
+                                mark_val = trade.get('mark', 0) or 0
+                                mtd_pnl_val = trade.get('mtd_pnl', 0) or 0
+                                inception_pnl_val = trade.get('inception_pnl', 0) or 0
+                                
+                                # Create spreadsheet-style table
+                                market_data = {
+                                    'Greeks': ['Delta', 'Gamma', 'Theta', 'Vega'],
+                                    'Values': [f"{delta_val:.2f}", f"{gamma_val:.2f}", f"{theta_val:.2f}", f"{vega_val:.2f}"],
+                                    'P&L': ['Mkt Val', 'Mark', 'MTD', 'Total'],
+                                    'P&L Values': [f"${market_value_val:,.0f}", f"${mark_val:,.0f}", f"${mtd_pnl_val:,.0f}", f"${inception_pnl_val:,.0f}"]
+                                }
+                                
+                                # Display as a simple table
+                                st.dataframe(
+                                    pd.DataFrame(market_data),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                    height=100
+                                )
+                            
+                            st.divider()
+                            
+                            # Management buttons
+                            col_edit, col_unwind, col_expire, col_delete = st.columns(4)
+                            
+                            with col_edit:
+                                if st.button(f"Edit", key=f"edit_exotic_{i}"):
+                                    st.session_state[f"edit_exotic_trade_{i}"] = True
+                            
+                            with col_unwind:
+                                if st.button(f"Unwind", key=f"unwind_exotic_{i}"):
+                                    st.session_state[f"unwind_exotic_trade_{i}"] = True
+                            
+                            with col_expire:
+                                if st.button(f"Expire", key=f"expire_exotic_{i}"):
+                                    # Move to trade history as expired worthless
+                                    trade_copy = trade.copy()
+                                    trade_copy['status'] = 'Expired Worthless'
+                                    trade_copy['unwind_date'] = datetime.now().date()
+                                    trade_copy['unwind_price'] = 0.0
+                                    trade_copy['pnl_usd'] = -float(trade.get('cost_usd', 0)) if trade.get('cost_usd') else 0
+                                    
+                                    if 'trade_history' not in st.session_state:
+                                        st.session_state.trade_history = []
+                                    st.session_state.trade_history.append(trade_copy)
+                                    
+                                    del st.session_state.manual_trades[i]
+                                    auto_save_data()
+                                    st.success(f"Marked trade {trade['trade_id']} as expired worthless")
+                                    st.rerun()
+                            
+                            with col_delete:
+                                if st.button(f"Delete", key=f"delete_exotic_{i}"):
+                                    del st.session_state.manual_trades[i]
+                                    auto_save_data()
+                                    st.success(f"Deleted trade {trade['trade_id']}")
+                                    st.rerun()
             else:
                 st.info("No exotics data loaded")
         
